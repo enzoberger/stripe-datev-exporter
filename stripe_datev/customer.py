@@ -1,4 +1,5 @@
 import stripe
+import config
 
 customers_cached = {}
 
@@ -8,6 +9,12 @@ def retrieveCustomer(id):
       return customers_cached[id]
     cus = stripe.Customer.retrieve(id)
     customers_cached[cus.id] = cus
+    # Enzo write stripe Customer
+    f = open("out/stripe/customer_{}.txt".format(id), "w")
+    f.write(str(cus))
+    f.close()
+    print("write customer {} done".format(id))
+    # Enzo End
     return cus
   elif isinstance(id, stripe.Customer):
     customers_cached[id.id] = id
@@ -83,7 +90,7 @@ country_codes_eu = [
 
 def getAccountingProps(customer, invoice=None, checkout_session=None):
   props = {
-    "customer_account": "10001",
+    "customer_account": config.customer_account,
     "vat_region": "World",
   }
   if customer is None:
@@ -113,14 +120,14 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
     "datev_tax_key": "",
   })
 
-  if country == "DE":
+  if country == config.home_country:
     if invoice is not None and invoice_tax is None:
-      print("Warning: no tax in DE invoice", invoice["id"])
+      print("Warning: no tax in {} invoice".format(config.home_country), invoice["id"])
     if tax_exempt != "none":
-      print("Warning: DE customer tax status is", tax_exempt, customer["id"])
-    props["revenue_account"] = "8400"
+      print("Warning: {} customer tax status is".format(config.home_country), tax_exempt, customer["id"])
+    props["revenue_account"] = config.revenue_account
     # props["datev_tax_key"] = "9"
-    props["vat_region"] = "DE"
+    props["vat_region"] = config.home_country
     return props
 
   if country in country_codes_eu:
@@ -139,9 +146,9 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
       print("Warning: EU reverse charge customer without VAT ID", customer["id"])
 
     if country in country_codes_eu and vat_id is not None:
-      props["revenue_account"] = "8336"
+      props["revenue_account"] = config.revenue_account_reverse_charge
     else:
-      props["revenue_account"] = "8338"
+      props["revenue_account"] = config.revenue_account_world
 
     # props["datev_tax_key"] = "94"
     return props
@@ -154,7 +161,7 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
   else:
     print("Warning: unknown tax status for customer", customer["id"])
 
-  props["revenue_account"] = "8400"
+  props["revenue_account"] = config.revenue_account
   return props
 
 def getRevenueAccount(customer, invoice=None, checkout_session=None):
@@ -191,12 +198,12 @@ def validate_customers():
     tax_exempt = customer.tax_exempt
     vat_id = customer.tax_info.tax_id if customer.tax_info is not None else None
 
-    if country == "DE":
+    if country == config.home_country:
       if tax_exempt != "none":
-        print("Warning: DE customer tax status is", tax_exempt, customer.id)
+        print("Warning: {} customer tax status is".format(config.home_country), tax_exempt, customer.id)
 
     elif tax_exempt == "reverse":
-      if country in ["ES", "IT", "GB"] and vat_id is None:
+      if country in ["ES", "IT", "GB"] and vat_id is None:  #warum nur für ES, IT und GB. sollte doch die ganze EU sein!!
         print("Warning: EU reverse charge customer without VAT ID", customer.id)
 
     # elif tax_exempt == "none":

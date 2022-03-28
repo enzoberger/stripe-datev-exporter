@@ -2,6 +2,7 @@ import stripe
 import decimal
 from datetime import datetime, timezone
 from . import output
+import config
 
 def listPayouts(fromTime, toTime):
   payouts = stripe.Payout.list(
@@ -11,6 +12,12 @@ def listPayouts(fromTime, toTime):
     },
     limit=100, # TODO: pagination
   )
+   # Enzo write stripe payout
+  f = open("out/stripe/payout_raw.txt", "w")
+  f.write(str(payouts))
+  f.close()
+  print("write payouts done")
+  # Enzo End
 
   payoutRecords = []
   for payout in payouts:
@@ -42,8 +49,8 @@ def createAccountingRecords(payouts):
       "Umsatz (ohne Soll/Haben-Kz)": output.formatDecimal(payout["amount"]),
       "Soll/Haben-Kennzeichen": "S",
       "WKZ Umsatz": "EUR",
-      "Konto": "1360",
-      "Gegenkonto (ohne BU-Schlüssel)": "1201",
+      "Konto": config.payout_account,
+      "Gegenkonto (ohne BU-Schlüssel)": config.payout_contra_account,
       # "BU-Schlüssel": "0",
       # "Belegdatum": output.formatDateDatev(payout["arrival_date"]),
       # "Belegfeld 1": payout["id"],

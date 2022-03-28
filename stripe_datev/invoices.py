@@ -22,6 +22,12 @@ def listFinalizedInvoices(fromTime, toTime):
       },
       limit=50,
     )
+    # Enzo write stripe invoices
+    f = open("out/stripe/invoices_raw.txt", "w")
+    f.write(str(response))
+    f.close()
+    print("write invoces done")
+    # Enzo End
     # print("Fetched {} invoices".format(len(response.data)))
     if len(response.data) == 0:
       break
@@ -113,7 +119,9 @@ def createRevenueItems(invs):
 
     finalized_date = datetime.fromtimestamp(invoice.status_transitions.finalized_at, timezone.utc).astimezone(config.accounting_tz)
 
-    invoice_discount = decimal.Decimal(((invoice.get("discount", None) or {}).get("coupon", None) or {}).get("percent_off", 0))
+#    invoice_discount = decimal.Decimal(((invoice.get("discount", None) or {}).get("coupon", None) or {}).get("percent_off", 0))
+    invoice_discount_value = ((invoice.get("discount", None) or {}).get("coupon", None) or {}).get("percent_off", 0)
+    invoice_discount = decimal.Decimal( 0 if invoice_discount_value is None else invoice_discount_value )
 
     if invoice.lines.has_more:
       lines = invoice.lines.list().auto_paging_iter()
@@ -215,7 +223,7 @@ def createAccountingRecords(revenue_item):
         "Soll/Haben-Kennzeichen": "S",
         "WKZ Umsatz": "EUR",
         "Konto": accounting_props["revenue_account"],
-        "Gegenkonto (ohne BU-Schlüssel)": "990",
+        "Gegenkonto (ohne BU-Schlüssel)": config.contra_account_no_bu_key,
         "Buchungstext": "{} / pRAP nach {}".format(text, "{}..{}".format(forward_months[0]["start"].strftime("%Y-%m"), forward_months[-1]["start"].strftime("%Y-%m")) if len(forward_months) > 1 else forward_months[0]["start"].strftime("%Y-%m")),
       })
 
@@ -225,7 +233,7 @@ def createAccountingRecords(revenue_item):
           "Umsatz (ohne Soll/Haben-Kz)": output.formatDecimal(month["amounts"][0]),
           "Soll/Haben-Kennzeichen": "S",
           "WKZ Umsatz": "EUR",
-          "Konto": "990",
+          "Konto": config.contra_account,
           "Gegenkonto (ohne BU-Schlüssel)": accounting_props["revenue_account"],
           "Buchungstext": "{} / pRAP aus {}".format(text, created.strftime("%Y-%m")),
         })
@@ -375,7 +383,7 @@ def accrualRecords(invoiceDate, invoiceAmount, customerAccount, revenueAccount, 
     "Soll/Haben-Kennzeichen": "S",
     "WKZ Umsatz": "EUR",
     "Konto": str(revenueAccount),
-    "Gegenkonto (ohne BU-Schlüssel)": "990",
+    "Gegenkonto (ohne BU-Schlüssel)": config.contra_account_no_bu_key,
     "Buchungstext": accrueText,
   })
 
@@ -392,7 +400,7 @@ def accrualRecords(invoiceDate, invoiceAmount, customerAccount, revenueAccount, 
       "Umsatz (ohne Soll/Haben-Kz)": output.formatDecimal(periodAmount),
       "Soll/Haben-Kennzeichen": "S",
       "WKZ Umsatz": "EUR",
-      "Konto": "990",
+      "Konto": config.contra_account,
       "Gegenkonto (ohne BU-Schlüssel)": str(revenueAccount),
       "Buchungstext": "{} / Aufloesung Rueckstellung Monat {}/{}".format(text, periodsBooked+1, revenueSpreadMonths),
     })

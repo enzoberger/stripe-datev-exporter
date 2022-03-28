@@ -15,6 +15,12 @@ def listChargesRaw(fromTime, toTime):
       },
       limit=50,
     )
+    # Enzo write stripe Charges
+    f = open("out/stripe/charges_raw.txt", "w")
+    f.write(str(response))
+    f.close()
+    print("write charges done")
+    # Enzo End
     if len(response.data) == 0:
       break
     starting_after = response.data[-1].id
