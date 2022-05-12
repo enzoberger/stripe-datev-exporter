@@ -2,7 +2,7 @@ import stripe
 import decimal
 from datetime import datetime, timezone
 from . import output
-import config
+from . import config
 
 def listPayouts(fromTime, toTime):
   payouts = stripe.Payout.list(

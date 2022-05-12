@@ -24,7 +24,7 @@ virtualenv -p python3 venv
 Add STRIPE_API_KEY to venv.bin.activate like: 
 
 ```
-export STRIPE_API_KEY="rk_live_..."
+
 ```
 and
 ```

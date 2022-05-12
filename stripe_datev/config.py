@@ -3,7 +3,7 @@ import pytz
 accounting_tz = pytz.timezone('Europe/Berlin')
 
 # company home country
-home_country = "DE"
+home_country = "AT"
 
 # accounts
 customer_account = "10001"

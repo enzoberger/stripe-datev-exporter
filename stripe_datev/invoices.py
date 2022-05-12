@@ -109,7 +109,9 @@ def createRevenueItems(invs):
         raise NotImplementedError("Handling of partially credited invoices is not implemented yet")
 
     line_items = []
-
+    # Enzo Add payment_intent
+    payment_intent = invoice.payment_intent
+    # Enzo end
     cus = customer.retrieveCustomer(invoice.customer)
     accounting_props = customer.getAccountingProps(customer.getCustomerDetails(cus), invoice=invoice)
     amount_with_tax = decimal.Decimal(invoice.total) / 100
@@ -149,7 +151,7 @@ def createRevenueItems(invs):
         "recognition_end": end,
         "amount_net": discounted_li_net,
         "text": text,
-        "amount_with_tax": discounted_li_total
+        "amount_with_tax": discounted_li_total,
       })
 
     revenue_items.append({
@@ -163,6 +165,7 @@ def createRevenueItems(invs):
       "text": "Invoice {}".format(invoice.number),
       "voided_at": voided_at,
       "line_items": line_items if voided_at is None else [],
+      "payment_intent": payment_intent if not payment_intent is None else 'no payment',
     })
 
   return revenue_items
@@ -174,7 +177,17 @@ def createAccountingRecords(revenue_item):
   line_items = revenue_item["line_items"]
   text = revenue_item["text"]
   voided_at = revenue_item.get("voided_at", None)
-
+  # Enzo add invoices_raw
+  payment_intent = revenue_item["payment_intent"]
+  # Enzo get add country
+  customer = revenue_item["customer"]
+  country = ""
+  if "deleted" in customer and customer.deleted:
+    country = ""
+  else:
+    if "address" in customer and customer.address is not None:
+      country = customer.address.country
+  # Enzo ende
   records = []
 
   records.append({
@@ -186,6 +199,8 @@ def createAccountingRecords(revenue_item):
     "Gegenkonto (ohne BU-Schlüssel)": accounting_props["revenue_account"],
     "BU-Schlüssel": accounting_props["datev_tax_key"],
     "Buchungstext": text,
+    "Identifikationsnummer": payment_intent,
+    "Land": country,
   })
 
   if voided_at is not None:
@@ -199,6 +214,8 @@ def createAccountingRecords(revenue_item):
       "Gegenkonto (ohne BU-Schlüssel)": accounting_props["customer_account"],
       "BU-Schlüssel": accounting_props["datev_tax_key"],
       "Buchungstext": "Storno {}".format(text),
+      "Identifikationsnummer": payment_intent,
+      "Land": country,
     })
 
   for line_item in line_items:
@@ -225,6 +242,8 @@ def createAccountingRecords(revenue_item):
         "Konto": accounting_props["revenue_account"],
         "Gegenkonto (ohne BU-Schlüssel)": config.contra_account_no_bu_key,
         "Buchungstext": "{} / pRAP nach {}".format(text, "{}..{}".format(forward_months[0]["start"].strftime("%Y-%m"), forward_months[-1]["start"].strftime("%Y-%m")) if len(forward_months) > 1 else forward_months[0]["start"].strftime("%Y-%m")),
+        "Identifikationsnummer": payment_intent,
+        "Land": country,
       })
 
       for month in forward_months:
@@ -236,6 +255,8 @@ def createAccountingRecords(revenue_item):
           "Konto": config.contra_account,
           "Gegenkonto (ohne BU-Schlüssel)": accounting_props["revenue_account"],
           "Buchungstext": "{} / pRAP aus {}".format(text, created.strftime("%Y-%m")),
+          "Identifikationsnummer": payment_intent,
+          "Land": country,
         })
 
   return records

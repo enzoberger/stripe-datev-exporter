@@ -81,7 +81,7 @@ def createRevenueItems(charges):
       else:
         raise NotImplementedError("Handling of partially refunded charges is not implemented yet")
 
-    cus = customer.retrieveCustomer(charge.customer)
+    cus = customer.retrieveCustomer(charge.e)
     session = getCheckoutSessionViaPaymentIntentCached(charge.payment_intent)
 
     accounting_props = customer.getAccountingProps(customer.getCustomerDetails(cus), checkout_session=session)

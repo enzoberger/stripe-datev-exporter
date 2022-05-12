@@ -30,6 +30,12 @@ if stripe.api_key.startswith("sk_test"):
 if not os.path.exists(out_dir):
   os.mkdir(out_dir)
 
+# Enzo Stripe Dir
+strip_dir = os.path.join(out_dir, "stripe")
+if not os.path.exists(strip_dir):
+  os.mkdir(strip_dir)
+# Enzo Ende
+
 class StripeDatevCli(object):
 
     def __init__(self, argv):

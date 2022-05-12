@@ -1,5 +1,5 @@
 import stripe
-import config
+from . import config
 
 customers_cached = {}
 
@@ -45,6 +45,7 @@ def getCustomerDetails(customer):
     "id": customer.id
   }
   if "deleted" in customer and customer.deleted:
+    print("Warning: deleted customer in revenues.", customer["id"])
     record["name"] = customer.id
   else:
     record["name"] = getCustomerName(customer)
@@ -203,7 +204,8 @@ def validate_customers():
         print("Warning: {} customer tax status is".format(config.home_country), tax_exempt, customer.id)
 
     elif tax_exempt == "reverse":
-      if country in ["ES", "IT", "GB"] and vat_id is None:  #warum nur für ES, IT und GB. sollte doch die ganze EU sein!!
+      #if country in ["ES", "IT", "GB"] and vat_id is None:  #warum nur für ES, IT und GB. sollte doch die ganze EU sein!!
+      if country in country_codes_eu and vat_id is None:  
         print("Warning: EU reverse charge customer without VAT ID", customer.id)
 
     # elif tax_exempt == "none":
