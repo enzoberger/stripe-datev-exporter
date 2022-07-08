@@ -11,7 +11,9 @@ invoices_cached = {}
 def listFinalizedInvoices(fromTime, toTime):
   starting_after = None
   invoices = []
+  i=0
   while True:
+    i=i+1
     response = stripe.Invoice.list(
       starting_after=starting_after,
       created={
@@ -23,10 +25,10 @@ def listFinalizedInvoices(fromTime, toTime):
       limit=50,
     )
     # Enzo write stripe invoices
-    f = open("out/stripe/invoices_raw.txt", "w")
+    f = open("out/stripe/invoices_raw-" + str(i) + ".txt", "w")
     f.write(str(response))
     f.close()
-    print("write invoces done")
+    print("write invoces_raw-" + str(i) + " done")
     # Enzo End
     # print("Fetched {} invoices".format(len(response.data)))
     if len(response.data) == 0:
@@ -106,7 +108,13 @@ def createRevenueItems(invs):
       if invoice.post_payment_credit_notes_amount == invoice.total:
         voided_at = datetime.fromtimestamp(cns[0].created, timezone.utc).astimezone(config.accounting_tz)
       else:
-        raise NotImplementedError("Handling of partially credited invoices is not implemented yet")
+        # start Enzo
+        print("-----------------------------------------------------------------------------------")
+        print("NotImplementedError: Handling of partially credited invoices is not implemented yet")
+        print("Nummer:",invoice.number,"credit:",invoice.post_payment_credit_notes_amount,"total:",invoice.total)
+        print("-----------------------------------------------------------------------------------")
+        # end Enzo
+        
 
     line_items = []
     # Enzo Add payment_intent

@@ -13,7 +13,7 @@ def retrieveCustomer(id):
     f = open("out/stripe/customer_{}.txt".format(id), "w")
     f.write(str(cus))
     f.close()
-    print("write customer {} done".format(id))
+    # print("write customer {} done".format(id))
     # Enzo End
     return cus
   elif isinstance(id, stripe.Customer):
@@ -102,8 +102,14 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
   invoice_tax = None
   if invoice is not None:
     invoice_tax = invoice.get("tax", None)
+    # print("invoice_tax from invoice:", invoice_tax)
+    invoice_total = invoice.get("total", None)
+    # print("invoice_total from invoice:",invoice_total)
   elif checkout_session is not None:
     invoice_tax = checkout_session.get("total_details", {}).get("amount_tax", None)
+    print("invoice_tax from checkout_session:", invoice_tax)
+    invoice_total = checkout_session.get("total_details", {}).get("total", None)
+    print("invoice_total from checkout_session:",invoice_total)
 
   # use tax status at time of invoice creation
   if invoice is not None and "customer_tax_exempt" in invoice:
@@ -135,15 +141,16 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
     props["vat_region"] = "EU"
 
   if tax_exempt == "reverse" or tax_exempt == "exempt" or invoice_tax is None or invoice_tax == 0:
-    if tax_exempt == "exempt":
-      print("Warning: tax exempt customer, treating like 'reverse'", customer["id"])
-      props["tax_exempt"] = "reverse"
-    if tax_exempt == "none":
+    # Enzo: ist mir nicht klar warum das gemacht wird. Kommt auch nicht im DATEV vor.
+    # if tax_exempt == "exempt" and invoice_total != 0:
+    #   print("Warning: tax exempt customer, treating like 'reverse'", customer["id"])
+    #   props["tax_exempt"] = "reverse"
+    if tax_exempt == "none" and invoice_total != 0:
       print("Warning: taxable customer without tax on invoice, treating like 'reverse'", customer["id"], invoice.get("id", "n/a") if invoice is not None else "n/a")
       props["tax_exempt"] = "reverse"
     if not (invoice_tax is None or invoice_tax == 0):
       print("Warning: tax on invoice of reverse charge customer", invoice.get("id", "n/a") if invoice is not None else "n/a")
-    if country in country_codes_eu and vat_id is None:
+    if country in country_codes_eu and vat_id is None and invoice_total != 0:
       print("Warning: EU reverse charge customer without VAT ID", customer["id"])
 
     if country in country_codes_eu and vat_id is not None:

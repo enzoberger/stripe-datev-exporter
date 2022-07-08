@@ -1,0 +1,15 @@
+write invoces_raw-1 done
+write invoces_raw-2 done
+write invoces_raw-3 done
+write invoces_raw-4 done
+Retrieved 88 invoice(s), total 1431.37 EUR
+write charges done
+Retrieved 30 charge(s), total 1431.37 EUR
+Warning, sum != amount, sum= -3.95  amount= -8.55
+months [{'start': datetime.datetime(2022, 3, 1, 0, 0, tzinfo=<DstTzInfo 'Europe/Berlin' CET+1:00:00 STD>), 'end': datetime.datetime(2022, 3, 31, 23, 59, 59, tzinfo=<DstTzInfo 'Europe/Berlin' CEST+2:00:00 DST>), 'amounts': [Decimal('-3.95')]}]
+Warning, sum != amount, sum= -4.74  amount= -10.26
+months [{'start': datetime.datetime(2022, 3, 1, 0, 0, tzinfo=<DstTzInfo 'Europe/Berlin' CET+1:00:00 STD>), 'end': datetime.datetime(2022, 3, 31, 23, 59, 59, tzinfo=<DstTzInfo 'Europe/Berlin' CEST+2:00:00 DST>), 'amounts': [Decimal('-4.74')]}]
+Voided/refunded Invoice INV-0406 Created 2022-04-10 14:54:48+02:00 Voided 2022-04-25 10:12:43+02:00
+Voided/refunded Invoice INV-0443 Created 2022-04-22 14:20:47+02:00 Voided 2022-05-11 09:20:54+02:00
+write payouts done
+Retrieved 4 payout(s), total 600.78 EUR

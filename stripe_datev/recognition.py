@@ -47,7 +47,7 @@ def split_months(start, end, amounts):
     mysum = sum(month["amounts"][idx] for month in months)
     # Enzo assert macht einen Fehler
     if(amount != mysum):
-      print("Warning, sum != amount, sum=", mysum, " amount=", amount) 
+      print("Warning, sum != amount, sum=", mysum, " amount=", amount)
       print("months", months)
     #assert amount == sum(month["amounts"][idx] for month in months)
 
