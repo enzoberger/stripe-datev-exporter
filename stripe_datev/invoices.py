@@ -7,6 +7,37 @@ from . import customer, output, dateparser, config
 import datedelta
 
 invoices_cached = {}
+credit_notes_cached = {}
+
+# Enzo check creditMemos
+def listCreditMemos(fromTime, toTime):
+  starting_after = None
+  credit_notes = []
+  i=0
+  while True:
+    i=i+1  
+    response = stripe.CreditNote.list( starting_after=starting_after, limit=50 )
+
+    if len(response.data) == 0:
+      break
+    starting_after = response.data[-1].id
+    for credit_note in response.data:
+      created = datetime.fromtimestamp(credit_note.created, timezone.utc).astimezone(config.accounting_tz)
+      if created < fromTime or created >= toTime:
+        continue
+      credit_notes.append(credit_note)
+      credit_notes_cached[credit_note.id] = credit_note
+    if not response.has_more:
+      break
+
+  f = open("out/stripe/credit_notes_raw.txt", "w")
+  f.write(str(credit_notes))
+  f.close()
+  # print("write credit_notes_raw done")
+
+  return list(reversed(credit_notes))
+  # Enzo End
+
 
 def listFinalizedInvoices(fromTime, toTime):
   starting_after = None
@@ -28,7 +59,7 @@ def listFinalizedInvoices(fromTime, toTime):
     f = open("out/stripe/invoices_raw-" + str(i) + ".txt", "w")
     f.write(str(response))
     f.close()
-    print("write invoces_raw-" + str(i) + " done")
+    # print("write invoces_raw-" + str(i) + " done")
     # Enzo End
     # print("Fetched {} invoices".format(len(response.data)))
     if len(response.data) == 0:
@@ -86,7 +117,7 @@ def getLineItemRecognitionRange(line_item, invoice):
       pass
 
   if start is None and end is None:
-    print("Warning: unknown period for line item --", invoice.id, line_item.get("description"))
+    print("Warning: unknown period for line item --", invoice.number, line_item.get("description"))
     start = created
     end = created
 
@@ -102,18 +133,19 @@ def createRevenueItems(invs):
     if invoice.status == "void":
       voided_at = datetime.fromtimestamp(invoice.status_transitions.voided_at, timezone.utc).astimezone(config.accounting_tz)
 
-    if invoice.post_payment_credit_notes_amount > 0:
-      cns = stripe.CreditNote.list(invoice=invoice.id).data
-      assert len(cns) == 1
-      if invoice.post_payment_credit_notes_amount == invoice.total:
-        voided_at = datetime.fromtimestamp(cns[0].created, timezone.utc).astimezone(config.accounting_tz)
-      else:
-        # start Enzo
-        print("-----------------------------------------------------------------------------------")
-        print("NotImplementedError: Handling of partially credited invoices is not implemented yet")
-        print("Nummer:",invoice.number,"credit:",invoice.post_payment_credit_notes_amount,"total:",invoice.total)
-        print("-----------------------------------------------------------------------------------")
-        # end Enzo
+    # Enzo: braucht man nicht mehr, das Credit Notes nun berücksichtigt werden.
+    # if invoice.post_payment_credit_notes_amount > 0:
+    #   cns = stripe.CreditNote.list(invoice=invoice.id).data
+    #   assert len(cns) == 1
+    #   if invoice.post_payment_credit_notes_amount == invoice.total:
+    #     voided_at = datetime.fromtimestamp(cns[0].created, timezone.utc).astimezone(config.accounting_tz)
+    #   else:
+    #     # start Enzo
+    #     print("-----------------------------------------------------------------------------------")
+    #     print("NotImplementedError: Handling of partially credited invoices is not implemented yet")
+    #     print("Nummer:",invoice.number,"credit:",invoice.post_payment_credit_notes_amount,"total:",invoice.total)
+    #     print("-----------------------------------------------------------------------------------")
+    #     # end Enzo
         
 
     line_items = []
@@ -175,8 +207,32 @@ def createRevenueItems(invs):
       "line_items": line_items if voided_at is None else [],
       "payment_intent": payment_intent if not payment_intent is None else 'no payment',
     })
-
+      
   return revenue_items
+
+def createCreditNoteItems(credit_notes):
+
+  credit_note_items = []
+
+  for credit_note in credit_notes:
+    cus = customer.retrieveCustomer(credit_note.customer)
+    accounting_props = customer.getAccountingProps(customer.getCustomerDetails(cus), invoice=credit_note)
+    amount_with_tax = decimal.Decimal(credit_note.total) / 100
+    amount_net = decimal.Decimal(credit_note.total_excluding_tax) / 100
+    created_date = datetime.fromtimestamp(credit_note.created, timezone.utc).astimezone(config.accounting_tz)
+
+    credit_note_items.append({
+      "id": credit_note.id,
+      "number": credit_note.number,
+      "created": created_date,
+      "amount_net": amount_net,
+      "accounting_props": accounting_props,
+      "customer": cus,
+      "amount_with_tax": amount_with_tax,
+      "text": "Invoice {}".format(credit_note.number),
+    })
+
+  return credit_note_items
 
 def createAccountingRecords(revenue_item):
   created = revenue_item["created"]
@@ -266,6 +322,37 @@ def createAccountingRecords(revenue_item):
           "Identifikationsnummer": payment_intent,
           "Land": country,
         })
+
+  return records
+
+def createAccountingRecordCreditNote(credit_note_items):
+
+  records = []
+  for credit_note_item in credit_note_items:
+    created = credit_note_item["created"]
+    amount_with_tax = credit_note_item["amount_with_tax"]
+    accounting_props = credit_note_item["accounting_props"]
+    text = credit_note_item["text"]
+    customer = credit_note_item["customer"]
+    country = ""
+    if "deleted" in customer and customer.deleted:
+      country = ""
+    else:
+      if "address" in customer and customer.address is not None:
+        country = customer.address.country
+
+    print("credit note", text, "Created", created)
+    records.append({
+      "date": created,
+      "Umsatz (ohne Soll/Haben-Kz)": output.formatDecimal(amount_with_tax),
+      "Soll/Haben-Kennzeichen": "S",
+      "WKZ Umsatz": "EUR",
+      "Konto": accounting_props["revenue_account"],
+      "Gegenkonto (ohne BU-Schlüssel)": accounting_props["customer_account"],
+      "BU-Schlüssel": accounting_props["datev_tax_key"],
+      "Buchungstext": "Storno {}".format(text),
+      "Land": country,
+    })
 
   return records
 

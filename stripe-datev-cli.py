@@ -65,7 +65,12 @@ class StripeDatevCli(object):
         invoices = stripe_datev.invoices.listFinalizedInvoices(fromTime, toTime)
         print("Retrieved {} invoice(s), total {} EUR".format(len(invoices), sum([decimal.Decimal(i.total) / 100 for i in invoices])))
 
+        # Enzo creditMemos
+        credit_notes = stripe_datev.invoices.listCreditMemos(fromTime, toTime)
+        print("Retrieved {} credit_note(s)".format(len(credit_notes)))
+
         revenue_items = stripe_datev.invoices.createRevenueItems(invoices)
+        credit_note_items = stripe_datev.invoices.createCreditNoteItems(credit_notes)
 
         charges = stripe_datev.charges.listChargesRaw(fromTime, toTime)
         print("Retrieved {} charge(s), total {} EUR".format(len(charges), sum([decimal.Decimal(c.amount) / 100 for c in charges])))
@@ -96,6 +101,8 @@ class StripeDatevCli(object):
         records = []
         for revenue_item in revenue_items:
           records += stripe_datev.invoices.createAccountingRecords(revenue_item)
+
+        records += stripe_datev.invoices.createAccountingRecordCreditNote(credit_note_items)
 
         records_by_month = {}
         for record in records:
@@ -153,6 +160,21 @@ class StripeDatevCli(object):
             continue
 
           pdfLink = charge["receipt_url"]
+          print("Downloading {} to {}".format(pdfLink, filePath))
+          r = requests.get(pdfLink)
+          if r.status_code != 200:
+            print("HTTP status {}".format(r.status_code))
+            continue
+          with open(filePath, "wb") as fp:
+            fp.write(r.content)
+        
+        for credit_note in credit_notes:
+          fileName = "{} {} {}.pdf".format(datetime.fromtimestamp(credit_note.created, timezone.utc).strftime("%Y-%m-%d"), "Credit Note", credit_note.number or credit_note.id)
+          filePath = os.path.join(pdfDir, fileName)
+          if os.path.exists(filePath):
+            continue
+
+          pdfLink = credit_note["pdf"]
           print("Downloading {} to {}".format(pdfLink, filePath))
           r = requests.get(pdfLink)
           if r.status_code != 200:

@@ -99,6 +99,11 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
 
   country = customer.get("country", None)
 
+  # Enzo
+  inv_object = None
+  if invoice is not None:
+    inv_object = invoice.get("object", None)
+
   invoice_tax = None
   if invoice is not None:
     invoice_tax = invoice.get("tax", None)
@@ -145,12 +150,12 @@ def getAccountingProps(customer, invoice=None, checkout_session=None):
     # if tax_exempt == "exempt" and invoice_total != 0:
     #   print("Warning: tax exempt customer, treating like 'reverse'", customer["id"])
     #   props["tax_exempt"] = "reverse"
-    if tax_exempt == "none" and invoice_total != 0:
+    if tax_exempt == "none" and invoice_total != 0 and inv_object != "credit_note":
       print("Warning: taxable customer without tax on invoice, treating like 'reverse'", customer["id"], invoice.get("id", "n/a") if invoice is not None else "n/a")
       props["tax_exempt"] = "reverse"
-    if not (invoice_tax is None or invoice_tax == 0):
+    if not (invoice_tax is None or invoice_tax == 0 or inv_object == "credit_note"):
       print("Warning: tax on invoice of reverse charge customer", invoice.get("id", "n/a") if invoice is not None else "n/a")
-    if country in country_codes_eu and vat_id is None and invoice_total != 0:
+    if country in country_codes_eu and vat_id is None and invoice_total != 0 and inv_object != "credit_note":
       print("Warning: EU reverse charge customer without VAT ID", customer["id"])
 
     if country in country_codes_eu and vat_id is not None:
