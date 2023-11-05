@@ -7,78 +7,45 @@ from . import customer, output, dateparser, config
 import datedelta
 
 invoices_cached = {}
-credit_notes_cached = {}
+credit_note_cached = {}
 
 # Enzo check creditMemos
-def listCreditMemos(fromTime, toTime):
-  starting_after = None
-  credit_notes = []
-  i=0
-  while True:
-    i=i+1  
-    response = stripe.CreditNote.list( starting_after=starting_after, limit=50 )
-
-    if len(response.data) == 0:
-      break
-    starting_after = response.data[-1].id
-    for credit_note in response.data:
-      created = datetime.fromtimestamp(credit_note.created, timezone.utc).astimezone(config.accounting_tz)
-      if created < fromTime or created >= toTime:
-        continue
-      credit_notes.append(credit_note)
-      credit_notes_cached[credit_note.id] = credit_note
-    if not response.has_more:
-      break
-
-  f = open("out/stripe/credit_notes_raw.txt", "w")
-  f.write(str(credit_notes))
-  f.close()
-  # print("write credit_notes_raw done")
-
-  return list(reversed(credit_notes))
-  # Enzo End
-
+def listCreditNotes(fromTime, toTime):
+  credit_notes = stripe.CreditNote.list().auto_paging_iter()
+  for credit_note in credit_notes:
+    created = datetime.fromtimestamp(credit_note.created, timezone.utc).astimezone(config.accounting_tz)
+    #print("fromTime {} created {} toTime {}".format(fromTime, created, toTime))
+    if created < fromTime or created >= toTime:
+      continue
+    credit_note_cached[credit_note.id] = credit_note
+    # Ausgabe
+    f = open("out/stripe/credit_notes/credit_note_id_" + credit_note.invoice + ".txt", "w")
+    f.write(str(credit_note))
+    f.close()
+    print("Got credit_note id {}".format(credit_note.id))
+    yield credit_note
 
 def listFinalizedInvoices(fromTime, toTime):
-  starting_after = None
-  invoices = []
-  i=0
-  while True:
-    i=i+1
-    response = stripe.Invoice.list(
-      starting_after=starting_after,
-      created={
-        "lt": int(toTime.timestamp())
-      },
-      due_date={
-        "gte": int(fromTime.timestamp()),
-      },
-      limit=50,
-    )
-    # Enzo write stripe invoices
-    f = open("out/stripe/invoices_raw-" + str(i) + ".txt", "w")
-    f.write(str(response))
+  invoices = stripe.Invoice.search(
+    query=
+    "created>" + str(int(fromTime.timestamp())) + 
+    " AND created<" + str(int(toTime.timestamp()))
+    ).auto_paging_iter()
+  for invoice in invoices:
+    if invoice.status == "draft":
+      continue
+    finalized_date = datetime.fromtimestamp(
+      invoice.status_transitions.finalized_at, timezone.utc).astimezone(config.accounting_tz)
+    if finalized_date < fromTime or finalized_date >= toTime:
+      # print("Skipping invoice {}, created {} finalized {} due {}".format(invoice.id, created_date, finalized_date, due_date))
+      continue
+    invoices_cached[invoice.id] = invoice
+    # Ausgabe
+    f = open("out/stripe/invoices/invoices_id_" + invoice.id + ".txt", "w")
+    f.write(str(invoice))
     f.close()
-    # print("write invoces_raw-" + str(i) + " done")
-    # Enzo End
-    # print("Fetched {} invoices".format(len(response.data)))
-    if len(response.data) == 0:
-      break
-    starting_after = response.data[-1].id
-    for invoice in response.data:
-      if invoice.status == "draft":
-        continue
-      finalized_date = datetime.fromtimestamp(invoice.status_transitions.finalized_at, timezone.utc).astimezone(config.accounting_tz)
-      if finalized_date < fromTime or finalized_date >= toTime:
-        # print("Skipping invoice {}, created {} finalized {} due {}".format(invoice.id, created_date, finalized_date, due_date))
-        continue
-      invoices.append(invoice)
-      invoices_cached[invoice.id] = invoice
-
-    if not response.has_more:
-      break
-
-  return list(reversed(invoices))
+    print("Got Invoice id: " + invoice.id)    
+    yield invoice
 
 def retrieveInvoice(id):
   if id in invoices_cached:

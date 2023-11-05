@@ -10,7 +10,7 @@ def retrieveCustomer(id):
     cus = stripe.Customer.retrieve(id)
     customers_cached[cus.id] = cus
     # Enzo write stripe Customer
-    f = open("out/stripe/customer_{}.txt".format(id), "w")
+    f = open("out/stripe/customers/customer_{}.txt".format(id), "w")
     f.write(str(cus))
     f.close()
     # print("write customer {} done".format(id))
@@ -187,18 +187,22 @@ def getDatevTaxKey(customer, invoice=None, checkout_session=None):
   return getAccountingProps(customer, invoice=invoice, checkout_session=checkout_session)["datev_tax_key"]
 
 def all_customers():
-  starting_after = None
-  while True:
-    response = stripe.Customer.list(
-      starting_after=starting_after,
-      limit=10
-    )
-    # print("Fetched {} customers".format(len(response.data)))
-    if len(response.data) == 0:
-      break
-    starting_after = response.data[-1].id
-    for item in response.data:
-      yield item
+  customers = stripe.Customer.list().auto_paging_iter()
+  for customer in customers:
+    yield customer
+
+  # starting_after = None
+  # while True:
+  #   response = stripe.Customer.list(
+  #     starting_after=starting_after,
+  #     limit=10
+  #   )
+  #   # print("Fetched {} customers".format(len(response.data)))
+  #   if len(response.data) == 0:
+  #     break
+  #   starting_after = response.data[-1].id
+  #   for item in response.data:
+  #     yield item
 
 def validate_customers():
   for customer in all_customers():

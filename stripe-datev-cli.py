@@ -34,177 +34,186 @@ if not os.path.exists(out_dir):
 strip_dir = os.path.join(out_dir, "stripe")
 if not os.path.exists(strip_dir):
   os.mkdir(strip_dir)
+customer_dir = os.path.join(out_dir, "stripe", "customers")
+if not os.path.exists(customer_dir):
+  os.mkdir(customer_dir)
+invoice_dir = os.path.join(out_dir, "stripe", "invoices")
+if not os.path.exists(invoice_dir):
+  os.mkdir(invoice_dir)
+credit_note_dir = os.path.join(out_dir, "stripe", "credit_notes")
+if not os.path.exists(credit_note_dir):
+  os.mkdir(credit_note_dir)
 # Enzo Ende
 
 class StripeDatevCli(object):
 
-    def __init__(self, argv):
-        self.argv = argv
+  def __init__(self, argv):
+    self.argv = argv
 
-    def run(self):
-        parser = argparse.ArgumentParser(
-          description='Stripe DATEV Exporter',
-        )
-        parser.add_argument('year', type=int, help='year to download data for')
-        parser.add_argument('month', type=int, help='month to download data for')
+  def run(self):
+    parser = argparse.ArgumentParser(
+      description='Stripe DATEV Exporter',
+    )
+    parser.add_argument('year', type=int, help='year to download data for')
+    parser.add_argument('month', type=int, help='month to download data for')
 
-        args = parser.parse_args(self.argv[1:])
+    args = parser.parse_args(self.argv[1:])
 
-        year = int(args.year)
-        month = int(args.month)
+    year = int(args.year)
+    month = int(args.month)
 
-        if month > 0:
-          fromTime = stripe_datev.config.accounting_tz.localize(datetime(year, month, 1, 0, 0, 0, 0))
-          toTime = fromTime + datedelta.MONTH
-        else:
-          fromTime = stripe_datev.config.accounting_tz.localize(datetime(year, 1, 1, 0, 0, 0, 0))
-          toTime = fromTime + datedelta.YEAR
-        print("Retrieving data between {} and {}".format(fromTime.strftime("%Y-%m-%d"), (toTime - timedelta(0, 1)).strftime("%Y-%m-%d")))
-        thisMonth = fromTime.astimezone(stripe_datev.config.accounting_tz).strftime("%Y-%m")
+    if month > 0:
+      fromTime = stripe_datev.config.accounting_tz.localize(datetime(year, month, 1, 0, 0, 0, 0))
+      toTime = fromTime + datedelta.MONTH
+    else:
+      fromTime = stripe_datev.config.accounting_tz.localize(datetime(year, 1, 1, 0, 0, 0, 0))
+      toTime = fromTime + datedelta.YEAR
+    print("Retrieving data between {} and {}".format(fromTime.strftime("%Y-%m-%d"), (toTime - timedelta(0, 1)).strftime("%Y-%m-%d")))
+    thisMonth = fromTime.astimezone(stripe_datev.config.accounting_tz).strftime("%Y-%m")
 
-        invoices = stripe_datev.invoices.listFinalizedInvoices(fromTime, toTime)
-        print("Retrieved {} invoice(s), total {} EUR".format(len(invoices), sum([decimal.Decimal(i.total) / 100 for i in invoices])))
+    invoices = list(reversed(list(stripe_datev.invoices.listFinalizedInvoices(fromTime, toTime))))
+    print("Retrieved {} invoice(s), total {} EUR".format(len(invoices), sum([decimal.Decimal(i.total) / 100 for i in invoices])))
 
-        # Enzo creditMemos
-        credit_notes = stripe_datev.invoices.listCreditMemos(fromTime, toTime)
-        print("Retrieved {} credit_note(s)".format(len(credit_notes)))
+    # Enzo credit_note
+    credit_notes = list(reversed(list(stripe_datev.invoices.listCreditNotes(fromTime, toTime))))
+    print("Retrieved {} credit_note(s), total {} EUR".format(len(credit_notes), sum([decimal.Decimal(i.total) / 100 for i in credit_notes])))
 
-        revenue_items = stripe_datev.invoices.createRevenueItems(invoices)
-        credit_note_items = stripe_datev.invoices.createCreditNoteItems(credit_notes)
+    revenue_items = stripe_datev.invoices.createRevenueItems(invoices)
+    credit_note_items = stripe_datev.invoices.createCreditNoteItems(credit_notes)
 
-        charges = stripe_datev.charges.listChargesRaw(fromTime, toTime)
-        print("Retrieved {} charge(s), total {} EUR".format(len(charges), sum([decimal.Decimal(c.amount) / 100 for c in charges])))
+    charges = stripe_datev.charges.listChargesRaw(fromTime, toTime)
+    print("Retrieved {} charge(s), total {} EUR".format(len(charges), sum([decimal.Decimal(c.amount) / 100 for c in charges])))
 
-        direct_charges = list(filter(lambda charge: not stripe_datev.charges.chargeHasInvoice(charge), charges))
-        revenue_items += stripe_datev.charges.createRevenueItems(direct_charges)
+    direct_charges = list(filter(lambda charge: not stripe_datev.charges.chargeHasInvoice(charge), charges))
+    revenue_items += stripe_datev.charges.createRevenueItems(direct_charges)
 
-        overview_dir = os.path.join(out_dir, "overview")
-        if not os.path.exists(overview_dir):
-          os.mkdir(overview_dir)
+    overview_dir = os.path.join(out_dir, "overview")
+    if not os.path.exists(overview_dir):
+      os.mkdir(overview_dir)
 
-        with open(os.path.join(overview_dir, "overview-{:04d}-{:02d}.csv".format(year, month)), "w", encoding="utf-8") as fp:
-          fp.write(stripe_datev.invoices.to_csv(invoices))
+    with open(os.path.join(overview_dir, "overview-{:04d}-{:02d}.csv".format(year, month)), "w", encoding="utf-8") as fp:
+      fp.write(stripe_datev.invoices.to_csv(invoices))
 
-        monthly_recognition_dir = os.path.join(out_dir, "monthly_recognition")
-        if not os.path.exists(monthly_recognition_dir):
-          os.mkdir(monthly_recognition_dir)
+    monthly_recognition_dir = os.path.join(out_dir, "monthly_recognition")
+    if not os.path.exists(monthly_recognition_dir):
+      os.mkdir(monthly_recognition_dir)
 
-        with open(os.path.join(monthly_recognition_dir, "monthly_recognition-{}.csv".format(thisMonth)), "w", encoding="utf-8") as fp:
-          fp.write(stripe_datev.invoices.to_recognized_month_csv2(revenue_items))
+    with open(os.path.join(monthly_recognition_dir, "monthly_recognition-{}.csv".format(thisMonth)), "w", encoding="utf-8") as fp:
+      fp.write(stripe_datev.invoices.to_recognized_month_csv2(revenue_items))
 
-        datevDir = os.path.join(out_dir, 'datev')
-        if not os.path.exists(datevDir):
-          os.mkdir(datevDir)
+    datevDir = os.path.join(out_dir, 'datev')
+    if not os.path.exists(datevDir):
+      os.mkdir(datevDir)
 
-        # Datev Revenue
+    # Datev Revenue
 
-        records = []
-        for revenue_item in revenue_items:
-          records += stripe_datev.invoices.createAccountingRecords(revenue_item)
+    records = []
+    for revenue_item in revenue_items:
+      records += stripe_datev.invoices.createAccountingRecords(revenue_item)
 
-        records += stripe_datev.invoices.createAccountingRecordCreditNote(credit_note_items)
+    records += stripe_datev.invoices.createAccountingRecordCreditNote(credit_note_items)
 
-        records_by_month = {}
-        for record in records:
-          month = record["date"].strftime("%Y-%m")
-          records_by_month[month] = records_by_month.get(month, []) + [record]
+    records_by_month = {}
+    for record in records:
+      month = record["date"].strftime("%Y-%m")
+      records_by_month[month] = records_by_month.get(month, []) + [record]
 
-        for month, records in records_by_month.items():
-          if month == thisMonth:
-            name = "EXTF_{}_Revenue.csv".format(thisMonth)
-          else:
-            name = "EXTF_{}_Revenue_From_{}.csv".format(month, thisMonth)
-          stripe_datev.output.writeRecords(os.path.join(datevDir, name), records)
+    for month, records in records_by_month.items():
+      if month == thisMonth:
+        name = "EXTF_{}_Revenue.csv".format(thisMonth)
+      else:
+        name = "EXTF_{}_Revenue_From_{}.csv".format(month, thisMonth)
+      stripe_datev.output.writeRecords(os.path.join(datevDir, name), records)
 
-        # Datev charges
+    # Datev charges
 
-        charge_records = stripe_datev.charges.createAccountingRecords(charges)
-        stripe_datev.output.writeRecords(os.path.join(datevDir, "EXTF_{}_Charges.csv".format(thisMonth)), charge_records)
+    charge_records = stripe_datev.charges.createAccountingRecords(charges)
+    stripe_datev.output.writeRecords(os.path.join(datevDir, "EXTF_{}_Charges.csv".format(thisMonth)), charge_records)
 
-        # Datev payouts
+    # Datev payouts
 
-        payoutObjects = stripe_datev.payouts.listPayouts(fromTime, toTime)
-        payout_records = stripe_datev.payouts.createAccountingRecords(payoutObjects)
-        stripe_datev.output.writeRecords(os.path.join(datevDir, "EXTF_{}_Payouts.csv".format(thisMonth)), payout_records)
+    payoutObjects = stripe_datev.payouts.listPayouts(fromTime, toTime)
+    payout_records = stripe_datev.payouts.createAccountingRecords(payoutObjects)
+    stripe_datev.output.writeRecords(os.path.join(datevDir, "EXTF_{}_Payouts.csv".format(thisMonth)), payout_records)
 
-        # PDF
+    # PDF
 
-        pdfDir = os.path.join(out_dir, 'pdf')
-        if not os.path.exists(pdfDir):
-          os.mkdir(pdfDir)
+    pdfDir = os.path.join(out_dir, 'pdf')
+    if not os.path.exists(pdfDir):
+      os.mkdir(pdfDir)
 
-        for invoice in invoices:
-          pdfLink = invoice.invoice_pdf
-          finalized_date = datetime.fromtimestamp(invoice.status_transitions.finalized_at, timezone.utc).astimezone(stripe_datev.config.accounting_tz)
-          invNo = invoice.number
+    for invoice in invoices:
+      pdfLink = invoice.invoice_pdf
+      finalized_date = datetime.fromtimestamp(invoice.status_transitions.finalized_at, timezone.utc).astimezone(stripe_datev.config.accounting_tz)
+      invNo = invoice.number
 
-          fileName = "{} {}.pdf".format(finalized_date.strftime("%Y-%m-%d"), invNo)
-          filePath = os.path.join(pdfDir, fileName)
-          if os.path.exists(filePath):
-            # print("{} exists, skipping".format(filePath))
-            continue
+      fileName = "{} {}.pdf".format(finalized_date.strftime("%Y-%m-%d"), invNo)
+      filePath = os.path.join(pdfDir, fileName)
+      if os.path.exists(filePath):
+        # print("{} exists, skipping".format(filePath))
+        continue
 
-          print("Downloading {} to {}".format(pdfLink, filePath))
-          r = requests.get(pdfLink)
-          if r.status_code != 200:
-            print("HTTP status {}".format(r.status_code))
-            continue
-          with open(filePath, "wb") as fp:
-            fp.write(r.content)
+      print("Downloading {} to {}".format(pdfLink, filePath))
+      r = requests.get(pdfLink)
+      if r.status_code != 200:
+        print("HTTP status {}".format(r.status_code))
+        continue
+      with open(filePath, "wb") as fp:
+        fp.write(r.content)
 
-        for charge in charges:
-          fileName = "{} {}.html".format(datetime.fromtimestamp(charge.created, timezone.utc).strftime("%Y-%m-%d"), charge.receipt_number or charge.id)
-          filePath = os.path.join(pdfDir, fileName)
-          if os.path.exists(filePath):
-            # print("{} exists, skipping".format(filePath))
-            continue
+    for charge in charges:
+      fileName = "{} {}.html".format(datetime.fromtimestamp(charge.created, timezone.utc).strftime("%Y-%m-%d"), charge.receipt_number or charge.id)
+      filePath = os.path.join(pdfDir, fileName)
+      if os.path.exists(filePath):
+        # print("{} exists, skipping".format(filePath))
+        continue
 
-          pdfLink = charge["receipt_url"]
-          print("Downloading {} to {}".format(pdfLink, filePath))
-          r = requests.get(pdfLink)
-          if r.status_code != 200:
-            print("HTTP status {}".format(r.status_code))
-            continue
-          with open(filePath, "wb") as fp:
-            fp.write(r.content)
-        
-        for credit_note in credit_notes:
-          fileName = "{} {} {}.pdf".format(datetime.fromtimestamp(credit_note.created, timezone.utc).strftime("%Y-%m-%d"), "Credit Note", credit_note.number or credit_note.id)
-          filePath = os.path.join(pdfDir, fileName)
-          if os.path.exists(filePath):
-            continue
+      pdfLink = charge["receipt_url"]
+      print("Downloading {} to {}".format(pdfLink, filePath))
+      r = requests.get(pdfLink)
+      if r.status_code != 200:
+        print("HTTP status {}".format(r.status_code))
+        continue
+      with open(filePath, "wb") as fp:
+        fp.write(r.content)
+    
+    for credit_note in credit_notes:
+      fileName = "{} {} {}.pdf".format(datetime.fromtimestamp(credit_note.created, timezone.utc).strftime("%Y-%m-%d"), "Credit Note", credit_note.number or credit_note.id)
+      filePath = os.path.join(pdfDir, fileName)
+      if os.path.exists(filePath):
+        continue
 
-          pdfLink = credit_note["pdf"]
-          print("Downloading {} to {}".format(pdfLink, filePath))
-          r = requests.get(pdfLink)
-          if r.status_code != 200:
-            print("HTTP status {}".format(r.status_code))
-            continue
-          with open(filePath, "wb") as fp:
-            fp.write(r.content)
+      pdfLink = credit_note["pdf"]
+      print("Downloading {} to {}".format(pdfLink, filePath))
+      r = requests.get(pdfLink)
+      if r.status_code != 200:
+        print("HTTP status {}".format(r.status_code))
+        continue
+      with open(filePath, "wb") as fp:
+        fp.write(r.content)
 
 
-    def run_records(self):
-      records = []
+  def run_records(self):
+    records = []
 
-      # Invoice before first revenue period
-      records += stripe_datev.invoices.accrualRecords(datetime(2019, 12, 18), 100, 10001, 8338, "Invoice 2", datetime(2020, 1, 1), 12, False)
+    # Invoice before first revenue period
+    records += stripe_datev.invoices.accrualRecords(datetime(2019, 12, 18), 100, 10001, 8338, "Invoice 2", datetime(2020, 1, 1), 12, False)
 
-      # Invoice in first revenue period
-      records += stripe_datev.invoices.accrualRecords(datetime(2020, 1, 13), 100, 10002, 8400, "Invoice 2", datetime(2020, 1, 1), 12, False)
+    # Invoice in first revenue period
+    records += stripe_datev.invoices.accrualRecords(datetime(2020, 1, 13), 100, 10002, 8400, "Invoice 2", datetime(2020, 1, 1), 12, False)
 
-      # fromTime = datetime(2020, 1, 1)
-      fromTime = min([r["date"] for r in records])
-      toTime = max([r["date"] for r in records])
+    # fromTime = datetime(2020, 1, 1)
+    fromTime = min([r["date"] for r in records])
+    toTime = max([r["date"] for r in records])
 
-      datevDir = os.path.join(out_dir, 'datev')
-      if not os.path.exists(datevDir):
-        os.mkdir(datevDir)
-      with open(os.path.join(datevDir, "EXTF_accrual.csv"), 'w', encoding="latin1", errors="replace", newline="\r\n") as fp:
-          stripe_datev.output.printRecords(fp, records, fromTime, toTime)
+    datevDir = os.path.join(out_dir, 'datev')
+    if not os.path.exists(datevDir):
+      os.mkdir(datevDir)
+    with open(os.path.join(datevDir, "EXTF_accrual.csv"), 'w', encoding="latin1", errors="replace", newline="\r\n") as fp:
+        stripe_datev.output.printRecords(fp, records, fromTime, toTime)
 
-    def run_validate_customers(self):
-      stripe_datev.customer.validate_customers()
+  def run_validate_customers(self):
+    stripe_datev.customer.validate_customers()
 
 if __name__ == '__main__':
     StripeDatevCli(sys.argv).run()
